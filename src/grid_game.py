@@ -46,7 +46,7 @@ class GridGame:
         self.grid = np.random.randint(max_value+1, size=size)
         # create empty array which will store the time needed for 
         # shortest currently calculated paths from each coordinate
-        self.fastest_path_time = np.empty(shape=size)
+        self.fastest_path_time = np.ones(shape=size) * np.inf
         # create an empty array to hold the actual paths for shortest route
         self.fastest_path = np.empty(shape=size, dtype = object)
         # need to assign values to bottom right of grid
@@ -185,15 +185,6 @@ class GridGame:
                 if (posn[0] in range(self.size[0]) and 
                     posn[1] in range(self.size[1])):
                     moves = self.moves(posn, any_direction=any_direction)
-                    # calculate the quickest time and path needed to get to 
-                    # finish for each move. TSelf.fastest_path_time(posn) is
-                    # the time to get from location (posn) to the finish when
-                    # taking the quickest path. It is initialised to be higher
-                    # than any posible path so that a minimum can be found.
-                    if any_direction is False:
-                        self.fastest_path_time[posn] = (self.size[0] * 
-                                                        self.size[1] *
-                                                        self.max_value ** 2)
  
                     for i, move in enumerate(moves):
                         if (self.move_time(posn, move)
@@ -253,6 +244,31 @@ class GridGame:
         while self.paths_updated:
             self.iter_counter += 1
             self.iterate_path()
+        
+        return None
+            
+    def create_unvisited_set(self):
+        unvisited = set()
+        for i in range(self.size[0]):
+            for j in range(self.size[1]):
+                unvisited = unvisited.add((i,j))
+        unvisited.difference(self.source)
+        return unvisited
+    
+    def djikstra(self, source=(0,0), destination=(-1,-1)):
+        '''
+        implement Djikstra's algorithm
+
+        Returns
+        -------
+        None.
+
+        '''
+        self.source = source
+        self.destination = destination
+        self.unvisited = create_unvisited_set()
+        
+        
 
 #%% test
 def test(size=(10,10), max_value = 9, mode='absolute', show_its=True):
