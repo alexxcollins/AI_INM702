@@ -49,9 +49,6 @@ class GridGame:
         self.fastest_path_time = np.ones(shape=size) * np.inf
         # create an empty array to hold the actual paths for shortest route
         self.fastest_path = np.empty(shape=size, dtype = object)
-        # need to assign values to bottom right of grid
-        self.fastest_path_time[-1,-1] = 0
-        self.fastest_path[-1,-1] = [(self.size[0]-1,self.size[1]-1)]
         self.mode = mode
         # boolean to state whether a search for a better path has made any 
         # changes to the current fastest paths. Starts at True
@@ -211,6 +208,9 @@ class GridGame:
         None.
 
         '''
+        # need to assign values to bottom right of grid
+        self.fastest_path_time[-1,-1] = 0
+        self.fastest_path[-1,-1] = [(self.size[0]-1,self.size[1]-1)]
         self.iter_counter=1
         self.iterate_path(any_direction=False)
         best_path = self.fastest_path[0,0].copy()
@@ -247,15 +247,25 @@ class GridGame:
         
         return None
             
-    def create_unvisited_set(self):
-        unvisited = set()
+    def create_unvisited_list(self):
+        unvisited = list()
         for i in range(self.size[0]):
             for j in range(self.size[1]):
-                unvisited = unvisited.add((i,j))
-        unvisited.difference(self.source)
-        return unvisited
+                unvisited.append((i,j))
+        # don't think I need to remove the source at the start
+        # unvisited.remove(self.source)
+        self.unvisited_list = unvisited
+        
+    def djikstra_shortest_path(self):
+        S = [self.destination]
+        u = S[-1]
+        while u != self.source:
+            S.append(self.prev_node[u])
+            u = S[-1]
+        self.djikstra_path = S
+        
     
-    def djikstra(self, source=(0,0), destination=(-1,-1)):
+    def djikstra(self, source=(0,0), destination=None):
         '''
         implement Djikstra's algorithm
 
@@ -265,8 +275,48 @@ class GridGame:
 
         '''
         self.source = source
-        self.destination = destination
-        self.unvisited = create_unvisited_set()
+        if destination is None:
+            self.destination = (self.size[0]-1, self.size[1]-1)
+        else:
+            self.destination = destination
+        self.create_unvisited_list()
+        self.visited_list = []
+        # instead of using sets, could use dict with keys as indices and
+        # values as current shortest paths
+        self.unvisited_time = dict(zip(self.unvisited_list, 
+                                      [np.inf] * len(self.unvisited_list)))
+        self.unvisited_time[self.source]=0
+        self.visited_time = {}
+        self.prev_node = dict(zip(self.unvisited_list,
+                                  [np.nan] * len(self.unvisited_list)))
+        # use dict.pop((x,y)) to remove nodes that have been visited and return
+        # the value of the shortest path to be added to the visited dict
+        
+        # use min(dict) to return the key corresponding to minimum path
+        # this will be the node to start exploring now
+        while len(self.unvisited_time) > 0:
+            # u is the unvisited node with smallest time
+            u = min(self.unvisited_time, key=self.unvisited_time.get)
+            self.visited_time[u] = self.unvisited_time.pop(u)
+            if u == self.destination:
+                break
+            
+            neigbours = self.moves(from_posn=u)
+            # neigbours just gives all possible moves - up, down, left, right
+            # moves may be off grid or to visited nodes. So use Try to discount
+            # these possibilities
+            for n in neigbours:
+                try:
+                    # next line is just to get code to fail if n is not a 
+                    # key of self.unvisited_time
+                    _ = self.unvisited_time[n]
+                    alt = self.visited_time[u] + self.move_time(u,n)
+                    if alt < self.unvisited_time[n]:
+                        self.unvisited_time[n] = alt
+                        self.prev_node[n] = u
+                except Exception:
+                    continue
+        self.djikstra_shortest_path()
         
         
 
@@ -275,7 +325,9 @@ def test(size=(10,10), max_value = 9, mode='absolute', show_its=True):
     game = GridGame(size=size, max_value=max_value, mode=mode)
     game.visualise_grid()
     game.solve_game(show_iterations=show_its)
-    return None
+    game.djikstra()
+    game.visualise_grid(game.djikstra_path)
+    return game
 
 def break_the_algo():
     #this reads an unusual path
