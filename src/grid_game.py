@@ -28,7 +28,7 @@ import matplotlib as mpl
 
 
 class GridGame:
-    def __init__(self, size=(3, 3), max_value=9, mode="absolute", random_seed=42):
+    def __init__(self, size=(3, 3), mode="absolute", random_seed=42):
         """
         Sets up the grid object to play the game, as well as sets the rules
         mode
@@ -42,9 +42,7 @@ class GridGame:
         """
 
         self.size = size
-        self.max_value = max_value
         self.rng = np.random.default_rng(random_seed)
-        self.grid = self.rng.integers(max_value + 1, size=size)
         # create empty array which will store the time needed for
         # shortest currently calculated paths from each coordinate
         self.fastest_path_time = np.ones(shape=size) * np.inf
@@ -57,6 +55,35 @@ class GridGame:
         # to count how many times code revisits each square to revise best
         # strategy.
         self.iteration_counter = 0
+
+    def set_grid_values(self, distribution="integers", **kwargs):
+        """
+        Initialise grid values with different probability distributions
+
+        Parameters
+        ----------
+        distribution : string, allowable options are: "intergers",
+                               "geometric", binomial" or "normal"
+            The distibution to use. The default is "integers".
+        **kwargs : string: key words for the distibution to use
+            For relevant key words see np.random.default_rng() docs
+
+        Returns
+        -------
+        values in the grid squares
+        """
+        if distribution == "integers":
+            self.grid = self.rng.integers(low=0, size=self.size, **kwargs)
+        if distribution == "binomial":
+            self.grid = self.rng.binomial(size=self.size, **kwargs)
+        if distribution == "geometric":
+            self.grid = self.rng.geometric(size=self.size, **kwargs)
+        if distribution == "normal":
+            self.grid = self.rng.normal(size=self.size, **kwargs)
+        # negative numbers in the grid make no sense - a "faster" path can
+        # always be found by moving between two negative squares. Transform
+        # data to ensure no negative numbers
+        self.grid = self.grid - min(0, self.grid.min())
 
     def visualise_grid(self, path=[]):
         """
@@ -86,12 +113,19 @@ class GridGame:
         ax.grid(True, which="minor", color="k")
 
         # # write numbers on the grid
+        # first define function to show text of values
+        def _text_render(i, j):
+            if isinstance(self.grid[i, j], np.floating):
+                return "{:.1f}".format(self.grid[i, j])
+            else:
+                return str(self.grid[i, j])
+
         for i in np.arange(self.size[0]):
             for j in np.arange(self.size[1]):
                 ax.text(
                     j,
                     i,
-                    str(self.grid[i, j]),
+                    _text_render(i, j),
                     size=font_size,
                     horizontalalignment="center",
                     verticalalignment="center",
@@ -360,7 +394,8 @@ class GridGame:
 
 #%% test
 def test(size=(10, 10), max_value=9, mode="absolute", show_its=True):
-    game = GridGame(size=size, max_value=max_value, mode=mode)
+    game = GridGame(size=size, mode=mode)
+    game.set_grid_values(distribution="integers", high=max_value)
     game.visualise_grid()
     game.solve_game(show_iterations=show_its)
     game.djikstra()
@@ -373,12 +408,28 @@ def break_the_algo():
     from pathlib import Path
     import pandas as pd
 
-    folder = Path("../data")
+    folder = Path("./")
     file = "test_grid.csv"
     df = pd.read_csv(folder / file, header=None)
     game = GridGame(size=(6, 5))
     game.grid = df.values
     game.solve_game(show_iterations=True)
+
+
+def break_the_algo2():
+    # this reads an unusual path
+    from pathlib import Path
+    import pandas as pd
+
+    folder = Path("./")
+    file = "test_grid2.csv"
+    df = pd.read_csv(folder / file, header=None)
+    game = GridGame(size=(5, 5), mode="absolute")
+    game.grid = df.values
+    game.solve_game(show_iterations=True)
+    game2 = GridGame(size=(5, 5), mode="relative")
+    game2.grid = df.values
+    game2.solve_game(show_iterations=True)
 
 
 # this doesn't work!
@@ -405,5 +456,7 @@ def timed_test(size=(10, 10), max_value=9, mode="absolute", number=20):
     return None
 
 
+# uncomment line below to time the algorithm (without the visualisations)
+# print(timeit.timeit('timed_test(size=(25,25), max_value = 9, mode="absolute")',number=100, globals=globals()))
 # uncomment line below to time the algorithm (without the visualisations)
 # print(timeit.timeit('timed_test(size=(25,25), max_value = 9, mode="absolute")',number=100, globals=globals()))
