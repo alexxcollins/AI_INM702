@@ -28,7 +28,7 @@ import matplotlib as mpl
 
 
 class GridGame:
-    def __init__(self, size=(3, 3), max_value=9, mode="absolute"):
+    def __init__(self, size=(3, 3), max_value=9, mode="absolute", random_seed=42):
         """
         Sets up the grid object to play the game, as well as sets the rules
         mode
@@ -43,7 +43,8 @@ class GridGame:
 
         self.size = size
         self.max_value = max_value
-        self.grid = np.random.randint(max_value + 1, size=size)
+        self.rng = np.random.default_rng(random_seed)
+        self.grid = self.rng.integers(max_value + 1, size=size)
         # create empty array which will store the time needed for
         # shortest currently calculated paths from each coordinate
         self.fastest_path_time = np.ones(shape=size) * np.inf
@@ -346,23 +347,14 @@ class GridGame:
 
             neigbours = self.moves(from_posn=u)
             # neigbours just gives all possible moves - up, down, left, right
-            # moves may be off grid or to visited nodes. So use Try to discount
+            # moves may be to visited nodes not in self.unvisited_time.
             # these possibilities
             for n in neigbours:
-                ### if x in dict.keys()
-                # this code works but I have since learned that I should avoid
-                # "try" and just use "if x in dict.keys()" as above.
                 if n in self.unvisited_time.keys():
-                    # try:
-                    # next line is just to get code to fail if n is not a
-                    # key of self.unvisited_time
-                    _ = self.unvisited_time[n]
                     alt = self.visited_time[u] + self.move_time(u, n)
                     if alt < self.unvisited_time[n]:
                         self.unvisited_time[n] = alt
                         self.prev_node[n] = u
-                # except Exception:
-                # continue
         self.djikstra_shortest_path()
 
 
