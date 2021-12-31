@@ -23,11 +23,12 @@ agent was on and the current cell it is on
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from abc import ABC, abstractmethod
 
 #%% Class to implement the game
 
 
-class GridGame:
+class GridGame(ABC):
     def __init__(self, size=(3, 3), random_seed=42):
         """
         Sets up the grid object to play the game, as well as sets the rules
@@ -54,6 +55,10 @@ class GridGame:
         # to count how many times code revisits each square to revise best
         # strategy.
         self.iteration_counter = 0
+
+    @abstractmethod
+    def time_on_first_cell(self):
+        pass
 
     def set_grid_values(self, distribution="integers", **kwargs):
         """
@@ -206,6 +211,8 @@ class GridGame:
                             )
                             self.fastest_path[posn] = self.fastest_path[move] + [posn]
 
+        # in classic game the agent spends time on the first cell. Need to factor this in
+        self.fastest_path_time[0, 0] += self.time_on_first_cell(self.grid[0, 0])
         if np.array_equal(old_grid, self.fastest_path_time):
             self.paths_updated = False
         self.iteration_counter += 1
@@ -234,14 +241,14 @@ class GridGame:
             self.iter_counter += 1
             self.iterate_path()
             if show_iterations:
-                # if np.array_equal(best_path, self.fastest_path[0, 0]) is False:
-                best_path = self.fastest_path[0, 0].copy()
-                print(
-                    "Wahoo! Fastest path now takes {:d}".format(
-                        int(self.fastest_path_time[0, 0])
+                if np.array_equal(best_path, self.fastest_path[0, 0]) is False:
+                    best_path = self.fastest_path[0, 0].copy()
+                    print(
+                        "Wahoo! Fastest path now takes {:d}".format(
+                            int(self.fastest_path_time[0, 0])
+                        )
                     )
-                )
-                self.visualise_grid(path=best_path)
+                    self.visualise_grid(path=best_path)
         print("\nCode required {:d} iterations".format(self.iter_counter))
 
     def solve_game_timed(self):
@@ -277,8 +284,7 @@ class GridGame:
         for i in range(self.size[0]):
             for j in range(self.size[1]):
                 unvisited.append((i, j))
-        # don't think I need to remove the source at the start
-        # unvisited.remove(self.source)
+
         self.unvisited_list = unvisited
 
     def djikstra_shortest_path(self):
@@ -316,39 +322,36 @@ class GridGame:
         # the starting cell. It obvsiously takes zero time to "travel to" the
         # starting point:
         self.source = source
+
         if destination is None:
             self.destination = (self.size[0] - 1, self.size[1] - 1)
         else:
             self.destination = destination
+
         self.create_unvisited_list()  # method sets self.unvisited_list attribute.
         # Inialises list with all cells in grid
 
-        self.visited_list = []
-        # for priority queue, use dict with keys as indices and
-        # values as current shortest paths
-        self.unvisited_time = dict(
-            zip(self.unvisited_list, [np.inf] * len(self.unvisited_list))
-        )
-        self.unvisited_time[self.source] = 0  # time to reach starting cell
-
-        # use dict.pop((x,y)) to remove nodes that have been visited and return
-        # the value of the shortest path to be added to the visited dict
-        self.visited_time = {}
-
+        # dictionary to record previous visited nodes
         self.prev_node = dict(
             zip(self.unvisited_list, [np.nan] * len(self.unvisited_list))
         )
 
-        # use min(dict) to return the key corresponding to minimum path
-        # this will be the node to start exploring now
-        # this is part of the priority queue pocess: return location with min
-        # path length
-        while len(self.unvisited_time) > 0:
-            # u is the unvisited node with smallest time
-            # following function finds min of all dict keys (i.e. shortest paths)
-            u = min(self.unvisited_time, key=self.unvisited_time.get)
-            # take node out of unvisited "list" (dict) and put into visited list
-            self.visited_time[u] = self.unvisited_time.pop(u)
+        # dict to hold all the visited nodes and the time spent to get to them.
+        self.visited_time = {}
+
+        # initialise the priority queue: time spent at the initial node depends
+        # on the mode of the game
+        self.queue = PQueue(
+            self.source, self.time_on_first_cell(self.grid[self.source])
+        )
+
+        ##### replace with len(self.queue)
+        while len(self.queue.population) > 0:
+            # u is the unvisited node with smallest time, save it and unvisited
+            # time into .visited_time dict
+            u, time = self.queue.extract_min()
+            self.visited_time[u] = time
+
             if u == self.destination:
                 break
 
@@ -357,17 +360,72 @@ class GridGame:
             # moves may be to visited nodes not in self.unvisited_time.
             # these possibilities
             for n in neigbours:
-                if n in self.unvisited_time.keys():
-                    alt = self.visited_time[u] + self.move_time(u, n)
-                    if alt < self.unvisited_time[n]:
-                        self.unvisited_time[n] = alt
+                # only explore moving to nodes that have not been visited yet
+                if n not in self.visited_time.keys():
+                    # if n not in priority queue, add it:
+                    if n not in self.queue.population.keys():
+                        self.queue.add_with_priority(
+                            n, self.visited_time[u] + self.move_time(u, n)
+                        )
                         self.prev_node[n] = u
+                    else:
+                        alt = self.visited_time[u] + self.move_time(u, n)
+                        if alt < self.queue.population[n]:
+                            self.queue.decrease_priority(n, alt)
+                            self.prev_node[n] = u
+
         self.djikstra_shortest_path()
         print(
             "fastest path takes {}".format(
                 self.visited_time[(self.size[0] - 1, self.size[1] - 1)]
             )
         )
+
+
+class PQueue:
+    def __init__(self, start, t):
+        self.population = {start: t}  # we start at the first cell. Time spent is t
+
+    def extract_min(self):
+        """
+        Extracts the unvisited node and the least time required to get to it
+
+        Returns
+        -------
+        tuple - first value is tuple representing location of grid with shortest path to it
+                second value is time taken to get to returned location.
+        """
+        u = min(self.population, key=self.population.get)
+        return u, self.population.pop(u)
+
+    def add_with_priority(self, n, t):
+        """
+        Add cell to priority queue
+
+        Parameters
+        ----------
+        n : tuple of integers
+            tuple representing coordinates of cell to add to queue
+        t : integer or float
+            current best time to get to n
+
+        Returns
+        -------
+        None. Adds n to self.population
+
+        """
+        self.population[n] = t
+
+    def decrease_priority(self, n, t):
+        """
+        Update priority for node n, with time t
+
+        Parameters
+        ----------
+        n : tuple of two integers representing cell location in the grid
+        t : integer or float representing current shortest time to get to n
+        """
+        self.population[n] = t
 
 
 class Classic(GridGame):
@@ -405,6 +463,11 @@ class Classic(GridGame):
         """
         return self.grid[to_posn]
 
+    def time_on_first_cell(self, t):
+        # in classic game, the agent spends time on first cell before moving
+        super().time_on_first_cell()
+        return t
+
 
 class Relative(GridGame):
     """
@@ -441,10 +504,15 @@ class Relative(GridGame):
         """
         return abs(self.grid[to_posn] - self.grid[from_posn])
 
+    def time_on_first_cell(self, t):
+        # in classic game, the agent spends time on first cell before moving
+        super().time_on_first_cell()
+        return 0
+
 
 #%% test
-def test(size=(10, 10), max_value=9, mode="absolute", show_its=True):
-    game = GridGame(size=size, mode=mode)
+def test(size=(10, 10), max_value=9, show_its=True, random_seed=42):
+    game = Classic(size=size, random_seed=random_seed)
     game.set_grid_values(distribution="integers", high=max_value)
     game.visualise_grid()
     game.solve_game(show_iterations=show_its)
@@ -504,4 +572,7 @@ import timeit
 def timed_test(size=(10, 10), max_value=9, mode="absolute", number=20):
     game = GridGame(size=size, max_value=max_value, mode=mode)
     game.solve_game_timed()
+    return None
+    return None
+    return None
     return None
