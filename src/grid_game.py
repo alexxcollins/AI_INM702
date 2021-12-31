@@ -28,7 +28,7 @@ import matplotlib as mpl
 
 
 class GridGame:
-    def __init__(self, size=(3, 3), mode="absolute", random_seed=42):
+    def __init__(self, size=(3, 3), random_seed=42):
         """
         Sets up the grid object to play the game, as well as sets the rules
         mode
@@ -37,8 +37,8 @@ class GridGame:
         ----------
         size : tuple of integers, optional
             denotes size of grid. The default is (3,3).
-        mode : string, optional
-            either 'absolute' or 'relative'. The default is 'absolute'.
+        random_seed : integer, optional
+            random_seed to initialise random number generator for calss object
         """
 
         self.size = size
@@ -48,7 +48,6 @@ class GridGame:
         self.fastest_path_time = np.ones(shape=size) * np.inf
         # create an empty array to hold the actual paths for shortest route
         self.fastest_path = np.empty(shape=size, dtype=object)
-        self.mode = mode
         # boolean to state whether a search for a better path has made any
         # changes to the current fastest paths. Starts at True
         self.paths_updated = True
@@ -132,32 +131,6 @@ class GridGame:
                     # transform=ax.transData
                 )
         plt.show()
-
-    def move_time(self, from_posn, to_posn):
-        """
-        calculate the time needed to move from one square to the next. No
-        restrictions on how player can move.
-
-        Parameters
-        ----------
-        from_posn : tuple in form (i,j) where i, j are integers
-            describes the position the player is moving from
-        to_posn : tuple in form (i,j) where i, j are integers
-            describes the position the player is moving to
-
-        Returns
-        -------
-        time taken to move from one square to another square
-
-        """
-        if self.mode == "relative":
-            time = abs(self.grid[to_posn] - self.grid[from_posn])
-        elif self.mode == "absolute":
-            time = self.grid[to_posn]
-        else:
-            raise ValueError("mode must be either 'relative' or 'absolute'")
-
-        return time
 
     def moves(self, from_posn, any_direction=True):
         """
@@ -251,7 +224,7 @@ class GridGame:
         # need to assign values to bottom right of grid
         self.fastest_path_time[-1, -1] = 0
         self.fastest_path[-1, -1] = [(self.size[0] - 1, self.size[1] - 1)]
-        self.iter_counter = 1
+        self.iter_counter = 0
         self.iterate_path(any_direction=False)
         best_path = self.fastest_path[0, 0].copy()
         print("\nFastest path takes {:d}".format(int(self.fastest_path_time[0, 0])))
@@ -261,14 +234,14 @@ class GridGame:
             self.iter_counter += 1
             self.iterate_path()
             if show_iterations:
-                if np.array_equal(best_path, self.fastest_path[0, 0]) is False:
-                    best_path = self.fastest_path[0, 0].copy()
-                    print(
-                        "Wahoo! Fastest path now takes {:d}".format(
-                            int(self.fastest_path_time[0, 0])
-                        )
+                # if np.array_equal(best_path, self.fastest_path[0, 0]) is False:
+                best_path = self.fastest_path[0, 0].copy()
+                print(
+                    "Wahoo! Fastest path now takes {:d}".format(
+                        int(self.fastest_path_time[0, 0])
                     )
-                    self.visualise_grid(path=best_path)
+                )
+                self.visualise_grid(path=best_path)
         print("\nCode required {:d} iterations".format(self.iter_counter))
 
     def solve_game_timed(self):
@@ -390,6 +363,83 @@ class GridGame:
                         self.unvisited_time[n] = alt
                         self.prev_node[n] = u
         self.djikstra_shortest_path()
+        print(
+            "fastest path takes {}".format(
+                self.visited_time[(self.size[0] - 1, self.size[1] - 1)]
+            )
+        )
+
+
+class Classic(GridGame):
+    """
+    Subclass which plays the "classic" version of the game: moves take as long
+    as the value in the cell being moved to.
+
+    When initialising, we set the size of the grid and the random_seed
+    mode
+
+    Parameters
+    ----------
+    size : tuple of integers, optional
+        denotes size of grid. The default is (3,3).
+    random_seed : integer, optional
+        random_seed to initialise random number generator for calss object
+    """
+
+    def move_time(self, from_posn, to_posn):
+        """
+        calculate the time needed to move from one square to the next. No
+        restrictions on how player can move.
+
+        Parameters
+        ----------
+        from_posn : tuple in form (i,j) where i, j are integers
+            describes the position the player is moving from
+        to_posn : tuple in form (i,j) where i, j are integers
+            describes the position the player is moving to
+
+        Returns
+        -------
+        time taken to move from one square to another square
+
+        """
+        return self.grid[to_posn]
+
+
+class Relative(GridGame):
+    """
+    Subclass which plays the "crealtive" version of the game: moves time
+    is the difference between current cell and cell being moved to.
+
+    When initialising, we set the size of the grid and the random_seed
+    mode
+
+    Parameters
+    ----------
+    size : tuple of integers, optional
+        denotes size of grid. The default is (3,3).
+    random_seed : integer, optional
+        random_seed to initialise random number generator for calss object
+    """
+
+    def move_time(self, from_posn, to_posn):
+        """
+        Calculate the time needed to move from one square to the next. No
+        restrictions on how player can move.
+
+        Parameters
+        ----------
+        from_posn : tuple in form (i,j) where i, j are integers
+            describes the position the player is moving from
+        to_posn : tuple in form (i,j) where i, j are integers
+            describes the position the player is moving to
+
+        Returns
+        -------
+        time taken to move from one square to another square
+
+        """
+        return abs(self.grid[to_posn] - self.grid[from_posn])
 
 
 #%% test
@@ -411,8 +461,9 @@ def break_the_algo():
     folder = Path("./")
     file = "test_grid.csv"
     df = pd.read_csv(folder / file, header=None)
-    game = GridGame(size=(6, 5))
+    game = Classic(size=(6, 5))
     game.grid = df.values
+    print("iterations of fastest path found by naive algorithm")
     game.solve_game(show_iterations=True)
 
 
@@ -454,9 +505,3 @@ def timed_test(size=(10, 10), max_value=9, mode="absolute", number=20):
     game = GridGame(size=size, max_value=max_value, mode=mode)
     game.solve_game_timed()
     return None
-
-
-# uncomment line below to time the algorithm (without the visualisations)
-# print(timeit.timeit('timed_test(size=(25,25), max_value = 9, mode="absolute")',number=100, globals=globals()))
-# uncomment line below to time the algorithm (without the visualisations)
-# print(timeit.timeit('timed_test(size=(25,25), max_value = 9, mode="absolute")',number=100, globals=globals()))
