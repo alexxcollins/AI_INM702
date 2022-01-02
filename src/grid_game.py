@@ -261,7 +261,11 @@ class GridGame(ABC):
         None.
 
         """
-        self.iter_counter = 1
+        self.fastest_path_time[-1, -1] = 0
+        self.fastest_path[-1, -1] = [(self.size[0] - 1, self.size[1] - 1)]
+        self.iter_counter = 0
+        self.iterate_path(any_direction=False)
+        best_path = self.fastest_path[0, 0].copy()
         self.iterate_path(any_direction=False)
 
         while self.paths_updated:
@@ -303,7 +307,7 @@ class GridGame(ABC):
             u = S[-1]
         self.djikstra_path = S
 
-    def djikstra(self, source=(0, 0), destination=None):
+    def djikstra(self, source=(0, 0), destination=None, printout=True):
         """
         implement Djikstra's algorithm
 
@@ -375,11 +379,11 @@ class GridGame(ABC):
                             self.prev_node[n] = u
 
         self.djikstra_shortest_path()
-        print(
-            "fastest path takes {}".format(
-                self.visited_time[(self.size[0] - 1, self.size[1] - 1)]
-            )
-        )
+        self.djikstra_time_taken = self.visited_time[
+            (self.size[0] - 1, self.size[1] - 1)
+        ]
+        if printout:
+            print("fastest path takes {}".format(self.djikstra_time_taken))
 
 
 class PQueue:
